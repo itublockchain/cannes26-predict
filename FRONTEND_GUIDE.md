@@ -59,17 +59,17 @@ Response: { "success": true }
 Request: {
   "matchId": "0xabc...",
   "pathData": [
-    { "x": 0, "y": 66800, "t": 0 },
-    { "x": 1, "y": 66850, "t": 1000 },
-    { "x": 2, "y": 66900, "t": 2000 }
+    { "timestamp": 1775250794, "price": 66745.11 },
+    { "timestamp": 1775250795, "price": 66741.93 },
+    { "timestamp": 1775250796, "price": 66740.34 }
   ]
 }
 Response: { "success": true }
 ```
 
-- `x`: Zaman ekseni (saniye veya piksel)
-- `y`: Fiyat tahmini (USD)
-- `t`: Timestamp (ms, çizim başlangıcından itibaren)
+- `timestamp`: Unix timestamp (saniye). price_tick ile aynı format.
+- `price`: Tahmin edilen BTC/USD fiyatı
+- Çizim, oyun süresinin en az **%90'ını** kapsamalı (54/60 saniye). Aksi halde geçersiz sayılır ve rakip kazanır.
 
 ---
 

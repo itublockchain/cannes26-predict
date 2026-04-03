@@ -1,7 +1,9 @@
 import { prisma } from "../config/prisma.js";
 import type { DrawingPoint, PricePoint, ScoreResult } from "../types/index.js";
 
-const DRAW_THRESHOLD = 0.01; // RMSE difference below this = draw
+const DRAW_THRESHOLD = 0.01;
+const MIN_COVERAGE = 0.9; // Drawing must cover at least 90% of the game duration
+const GAME_DURATION = 60; // seconds
 
 export async function calculateScore(
   matchId: string,
@@ -25,35 +27,55 @@ export async function calculateScore(
   const p1Drawing = match.drawings.find((d) => d.userId === match.player1Id);
   const p2Drawing = match.drawings.find((d) => d.userId === match.player2Id);
 
-  if (!p1Drawing || !p2Drawing) {
-    // If a player didn't submit a drawing, the other wins
-    if (!p1Drawing && !p2Drawing) return { winner: ADDRESS_ZERO, player1Score: Infinity, player2Score: Infinity, isDraw: true };
-    if (!p1Drawing) return { winner: match.player2.walletAddress, player1Score: Infinity, player2Score: 0, isDraw: false };
+  const p1Path = p1Drawing ? (p1Drawing.pathData as unknown as DrawingPoint[]) : null;
+  const p2Path = p2Drawing ? (p2Drawing.pathData as unknown as DrawingPoint[]) : null;
+
+  const p1Valid = p1Path && hasMinCoverage(p1Path);
+  const p2Valid = p2Path && hasMinCoverage(p2Path);
+
+  // No valid drawings → draw
+  if (!p1Valid && !p2Valid) {
+    return { winner: ADDRESS_ZERO, player1Score: Infinity, player2Score: Infinity, isDraw: true };
+  }
+  // Only one valid → other wins
+  if (!p1Valid) {
+    return { winner: match.player2.walletAddress, player1Score: Infinity, player2Score: 0, isDraw: false };
+  }
+  if (!p2Valid) {
     return { winner: match.player1.walletAddress, player1Score: 0, player2Score: Infinity, isDraw: false };
   }
 
-  const normalizedActual = normalizeTimeSeries(actualCurve, 60);
-  const p1Path = p1Drawing.pathData as unknown as DrawingPoint[];
-  const p2Path = p2Drawing.pathData as unknown as DrawingPoint[];
+  // Both valid — score them
+  const normalizedActual = normalizeTimeSeries(actualCurve, GAME_DURATION);
+  const normalizedP1 = normalizeDrawingToActual(p1Path, normalizedActual);
+  const normalizedP2 = normalizeDrawingToActual(p2Path, normalizedActual);
 
-  const normalizedP1 = normalizeDrawing(p1Path, normalizedActual, 60);
-  const normalizedP2 = normalizeDrawing(p2Path, normalizedActual, 60);
-
-  const p1Score = rmse(normalizedP1, normalizedActual.map((p) => p.price));
-  const p2Score = rmse(normalizedP2, normalizedActual.map((p) => p.price));
+  const actualPrices = normalizedActual.map((p) => p.price);
+  const p1Score = rmse(normalizedP1, actualPrices);
+  const p2Score = rmse(normalizedP2, actualPrices);
 
   const diff = Math.abs(p1Score - p2Score);
   if (diff < DRAW_THRESHOLD) {
     // Tiebreaker: first to submit wins
-    if (p1Drawing.submittedAt <= p2Drawing.submittedAt) {
+    if (p1Drawing!.submittedAt <= p2Drawing!.submittedAt) {
       return { winner: match.player1.walletAddress, player1Score: p1Score, player2Score: p2Score, isDraw: false };
     }
     return { winner: match.player2.walletAddress, player1Score: p1Score, player2Score: p2Score, isDraw: false };
   }
 
-  // Lower RMSE wins
   const winner = p1Score < p2Score ? match.player1.walletAddress : match.player2.walletAddress;
   return { winner, player1Score: p1Score, player2Score: p2Score, isDraw: false };
+}
+
+/**
+ * Check if drawing covers at least 90% of the game duration.
+ * Drawing points are {timestamp, price} with 1 point per second.
+ */
+function hasMinCoverage(drawing: DrawingPoint[]): boolean {
+  if (drawing.length < 2) return false;
+
+  const drawingDuration = drawing[drawing.length - 1].timestamp - drawing[0].timestamp;
+  return drawingDuration >= GAME_DURATION * MIN_COVERAGE;
 }
 
 function normalizeTimeSeries(points: PricePoint[], count: number): PricePoint[] {
@@ -67,32 +89,17 @@ function normalizeTimeSeries(points: PricePoint[], count: number): PricePoint[] 
 
   for (let i = 0; i < count; i++) {
     const t = startT + (duration * i) / (count - 1);
-    const price = interpolate(points, t);
-    result.push({ timestamp: t, price });
+    result.push({ timestamp: t, price: interpolateAt(points, t) });
   }
 
   return result;
 }
 
-function normalizeDrawing(drawing: DrawingPoint[], actualCurve: PricePoint[], count: number): number[] {
-  if (drawing.length === 0) return Array(count).fill(0);
-
-  // Drawing y-values represent predicted prices
-  // Normalize to same number of points as actual curve
-  const startT = drawing[0].t;
-  const endT = drawing[drawing.length - 1].t;
-  const duration = endT - startT || 1;
-  const result: number[] = [];
-
-  for (let i = 0; i < count; i++) {
-    const t = startT + (duration * i) / (count - 1);
-    result.push(interpolateDrawing(drawing, t));
-  }
-
-  return result;
+function normalizeDrawingToActual(drawing: DrawingPoint[], actualCurve: PricePoint[]): number[] {
+  return actualCurve.map((actual) => interpolateAt(drawing, actual.timestamp));
 }
 
-function interpolate(points: PricePoint[], t: number): number {
+function interpolateAt(points: { timestamp: number; price: number }[], t: number): number {
   if (t <= points[0].timestamp) return points[0].price;
   if (t >= points[points.length - 1].timestamp) return points[points.length - 1].price;
 
@@ -104,20 +111,6 @@ function interpolate(points: PricePoint[], t: number): number {
   }
 
   return points[points.length - 1].price;
-}
-
-function interpolateDrawing(points: DrawingPoint[], t: number): number {
-  if (t <= points[0].t) return points[0].y;
-  if (t >= points[points.length - 1].t) return points[points.length - 1].y;
-
-  for (let i = 0; i < points.length - 1; i++) {
-    if (t >= points[i].t && t <= points[i + 1].t) {
-      const ratio = (t - points[i].t) / (points[i + 1].t - points[i].t);
-      return points[i].y + ratio * (points[i + 1].y - points[i].y);
-    }
-  }
-
-  return points[points.length - 1].y;
 }
 
 function rmse(predicted: number[], actual: number[]): number {

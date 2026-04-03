@@ -4,9 +4,8 @@ export interface PricePoint {
 }
 
 export interface DrawingPoint {
-  x: number;
-  y: number;
-  t: number;
+  timestamp: number;
+  price: number;
 }
 
 export interface ScoreResult {
