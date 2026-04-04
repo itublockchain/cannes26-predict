@@ -9,6 +9,7 @@ import type {
 } from "lightweight-charts";
 import type { Candle1s, ResolvedTradingChartGameConfig } from "../types";
 import { toLW, fillCandleGaps, candlesToLine } from "../utils/candles";
+import { SeriesAnimator } from "../utils/seriesAnimator";
 
 interface UseWebSocketParams {
   wsUrl: string;
@@ -552,6 +553,9 @@ export function useWebSocket({
       current: null,
     };
 
+    /** Smooth price transition between ticks (300ms easeOutCubic). */
+    const animator = new SeriesAnimator(series);
+
     /** Son kapanış; boş saniyelerde fiyatı open’a doğrusal köprüler. */
     let lastClose: number | null = null;
 
@@ -653,10 +657,14 @@ export function useWebSocket({
               : filled;
 
           series.setData(candlesToLine(dataForChart));
+          animator.reset();
           if (dataForChart.length > 0) {
-            lastClose = dataForChart[dataForChart.length - 1].close;
-            lastTimeRef.current = dataForChart[dataForChart.length - 1]
-              .time as number;
+            const lastCandle = dataForChart[dataForChart.length - 1];
+            lastClose = lastCandle.close;
+            lastTimeRef.current = lastCandle.time as number;
+            // Seed the animator with the last snapshot value so the
+            // first live tick animates smoothly from here.
+            animator.snapTo(lastCandle.time as number, lastCandle.close);
           }
           const barCount = dataForChart.length;
           const t0 = gameStartTimeRef.current;
@@ -725,44 +733,30 @@ export function useWebSocket({
             for (let j = 1; j <= nMissing; j++) {
               const t = bridgeFrom + j;
               const alpha = j / (nMissing + 1);
-              series.update({
-                time: t as UTCTimestamp,
-                value: fromPrice + (data.open - fromPrice) * alpha,
-              });
+              // Gap-fill points snap instantly (no easing) to avoid visual lag
+              animator.snapTo(t, fromPrice + (data.open - fromPrice) * alpha);
             }
           }
 
           /*
-           * LWC `update`: 2+ saniye atlama tek çağrıda bazen yeni bir “kol” gibi
-           * çiziliyor; üstte eksik saniyeleri doldurduk.
+           * Perpetual animation loop: update the target value.
+           * The always-running rAF loop will smoothly chase this via
+           * exponential smoothing (low-pass filtered, ~60 FPS).
            */
-          series.update({
-            time: targetTime as UTCTimestamp,
-            value: data.close,
-          });
+          animator.setTarget(targetTime, data.close);
           lastClose = data.close;
           lastLiveWickRef.current = { low: data.low, high: data.high };
           lastTimeRef.current = targetTime;
           onCandleTick();
 
           if (snapshotLoadedRef.current) {
-            const logicalLive = fixedLogicalRangeRef.current;
-            if (!pauseLivePriceRangeRef.current) {
-              refreshLockedPriceRangeFromLiveSeries(
-                series,
-                fixedPriceRangeRef,
-                gameConfig,
-                lastLiveWickRef.current,
-              );
-            }
-            if (logicalLive && !viewportAnimationActiveRef.current) {
-              scheduleReassertLockedViewport(
-                chart,
-                series,
-                logicalLive,
-                fixedPriceRangeRef.current,
-              );
-            }
+            // NOTE: Price scale is locked from snapshot.
+            // Per-tick rescaling (refreshLockedPriceRangeFromLiveSeries)
+            // and viewport reassertion (scheduleReassertLockedViewport)
+            // are DISABLED here because they cause instant Y-axis jumps
+            // that override the smooth price animation.
+            // The price range is wide enough from snapshot to accommodate
+            // the small live tick movements within the game round.
           }
 
           if (!snapshotLoadedRef.current) {
@@ -815,6 +809,7 @@ export function useWebSocket({
 
     return () => {
       cancelled = true;
+      animator.dispose();
       flushLivePriceRangeRef.current = null;
       if (pingTimer) clearInterval(pingTimer);
       if (reconnectTimer) clearTimeout(reconnectTimer);

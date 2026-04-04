@@ -9,6 +9,7 @@ import type {
 } from "lightweight-charts";
 import type { Candle1s, ResolvedTradingChartGameConfig } from "../types";
 import { toLW, fillCandleGaps, candlesToLine } from "../utils/candles";
+import { SeriesAnimator } from "../utils/seriesAnimator";
 import { applyDualPaneChartChrome } from "../utils/chartTimeScale";
 import {
   applyLockedViewport,
@@ -339,6 +340,9 @@ export function useMirrorWebSocket({
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let pingTimer: ReturnType<typeof setInterval> | null = null;
 
+    /** Smooth price transition for mirror chart. */
+    const animator = new SeriesAnimator(series);
+
     const applyBrushViewport = () => {
       const c = chartRef.current;
       const s = seriesRef.current;
@@ -443,10 +447,12 @@ export function useMirrorWebSocket({
               : filled;
 
           series.setData(candlesToLine(dataForChart));
+          animator.reset();
           if (dataForChart.length > 0) {
-            lastClose = dataForChart[dataForChart.length - 1].close;
-            lastTimeRef.current = dataForChart[dataForChart.length - 1]
-              .time as number;
+            const lastCandle = dataForChart[dataForChart.length - 1];
+            lastClose = lastCandle.close;
+            lastTimeRef.current = lastCandle.time as number;
+            animator.snapTo(lastCandle.time as number, lastCandle.close);
           }
           const barCount = dataForChart.length;
           const t0 = gameStartTimeRef.current;
@@ -518,17 +524,11 @@ export function useMirrorWebSocket({
             for (let j = 1; j <= nMissing; j++) {
               const t = bridgeFrom + j;
               const alpha = j / (nMissing + 1);
-              series.update({
-                time: t as UTCTimestamp,
-                value: fromPrice + (data.open - fromPrice) * alpha,
-              });
+              animator.snapTo(t, fromPrice + (data.open - fromPrice) * alpha);
             }
           }
 
-          series.update({
-            time: targetTime as UTCTimestamp,
-            value: data.close,
-          });
+          animator.setTarget(targetTime, data.close);
           lastClose = data.close;
           lastLiveWickRef.current = { low: data.low, high: data.high };
           lastTimeRef.current = targetTime;
@@ -569,6 +569,7 @@ export function useMirrorWebSocket({
 
     return () => {
       cancelled = true;
+      animator.dispose();
       if (pingTimer) clearInterval(pingTimer);
       if (reconnectTimer) clearTimeout(reconnectTimer);
       if (wsRef.current) wsRef.current.close();
