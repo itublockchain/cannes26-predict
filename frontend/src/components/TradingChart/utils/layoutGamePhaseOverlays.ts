@@ -29,38 +29,34 @@ export function layoutGamePhaseOverlays(
       el.style.display = "none";
     } else {
       el.style.display = "block";
-      el.style.transform = `translateX(${x}px)`;
+      el.style.transform = `translateX(${Math.round(x)}px)`;
     }
   };
 
   const ts = chart.timeScale();
   const halfBar = ts.options().barSpacing / 2;
-  const centerToBarLeft = (centerX: number | null): number | null => {
-    if (centerX === null) return null;
-    return centerX - halfBar;
-  };
 
-  const getXLogical = (offsetBars: number): number | null => {
-    const cx = ts.logicalToCoordinate((anchorLogical + offsetBars) as never);
-    return centerToBarLeft(cx);
-  };
+  const centerXAt = (offsetBars: number): number | null =>
+    ts.logicalToCoordinate((anchorLogical + offsetBars) as never);
 
-  updatePosition(elements.lineT0, getXLogical(0));
+  updatePosition(elements.lineT0, centerXAt(0));
   updatePosition(
     elements.lineObsEnd,
-    getXLogical(gameConfig.observationSeconds),
+    centerXAt(gameConfig.observationSeconds),
   );
   updatePosition(
     elements.lineTahminEnd,
-    getXLogical(gameConfig.tahminEndOffsetBars),
+    centerXAt(gameConfig.tahminEndOffsetBars),
   );
   updatePosition(
     elements.lineRoundEnd,
-    getXLogical(gameConfig.brushZoneEndOffsetBars),
+    centerXAt(gameConfig.brushZoneEndOffsetBars),
   );
 
-  const xTahminBandStart = getXLogical(gameConfig.observationSeconds);
-  const xTahminBandEnd = getXLogical(gameConfig.tahminEndOffsetBars);
+  const cObs = centerXAt(gameConfig.observationSeconds);
+  const cTah = centerXAt(gameConfig.tahminEndOffsetBars);
+  const xTahminBandStart = cObs === null ? null : cObs - halfBar;
+  const xTahminBandEnd = cTah === null ? null : cTah + halfBar;
 
   if (elements.gameTahminBgArea) {
     if (xTahminBandStart !== null && xTahminBandEnd !== null) {
@@ -69,10 +65,12 @@ export function layoutGamePhaseOverlays(
         Math.min(maxVisibleX, xTahminBandStart),
       );
       const clippedEndX = Math.max(0, Math.min(maxVisibleX, xTahminBandEnd));
-      const bgWidth = clippedEndX - clippedStartX;
+      const rs = Math.round(clippedStartX);
+      const re = Math.round(clippedEndX);
+      const bgWidth = Math.max(0, re - rs);
       if (bgWidth > 0) {
         elements.gameTahminBgArea.style.display = "block";
-        elements.gameTahminBgArea.style.transform = `translateX(${clippedStartX}px)`;
+        elements.gameTahminBgArea.style.transform = `translateX(${rs}px)`;
         elements.gameTahminBgArea.style.width = `${bgWidth}px`;
       } else {
         elements.gameTahminBgArea.style.display = "none";
@@ -83,15 +81,19 @@ export function layoutGamePhaseOverlays(
   }
 
   if (elements.gameBgArea) {
-    const xBrush = xTahminBandEnd;
-    const xEnd = getXLogical(gameConfig.brushZoneEndOffsetBars);
+    const cBrush = centerXAt(gameConfig.tahminEndOffsetBars);
+    const cEnd = centerXAt(gameConfig.brushZoneEndOffsetBars);
+    const xBrush = cBrush === null ? null : cBrush - halfBar;
+    const xEnd = cEnd === null ? null : cEnd + halfBar;
     if (xBrush !== null && xEnd !== null) {
       const clippedStartX = Math.max(0, Math.min(maxVisibleX, xBrush));
       const clippedEndX = Math.max(0, Math.min(maxVisibleX, xEnd));
-      const bgWidth = clippedEndX - clippedStartX;
+      const rs = Math.round(clippedStartX);
+      const re = Math.round(clippedEndX);
+      const bgWidth = Math.max(0, re - rs);
       if (bgWidth > 0) {
         elements.gameBgArea.style.display = "block";
-        elements.gameBgArea.style.transform = `translateX(${clippedStartX}px)`;
+        elements.gameBgArea.style.transform = `translateX(${rs}px)`;
         elements.gameBgArea.style.width = `${bgWidth}px`;
       } else {
         elements.gameBgArea.style.display = "none";

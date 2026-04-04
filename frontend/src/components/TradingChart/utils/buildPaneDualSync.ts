@@ -1,5 +1,5 @@
 import type { IChartApi } from "lightweight-charts";
-import type { ChartDualSync } from "../hooks/useMirrorWebSocket";
+import type { ChartDualSync } from "../hooks/useSecondPaneChartWebSocket";
 
 export function buildPaneDualSync(
   chart: IChartApi | null | undefined,

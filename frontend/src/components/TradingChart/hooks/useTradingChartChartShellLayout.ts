@@ -205,5 +205,5 @@ export function useTradingChartChartShellLayout(
     brushPanViewportAppliedRef,
     viewportAnimationActiveRef,
     brushViewportAnimRafRef,
-  ]); // eslint-disable-line react-hooks/exhaustive-deps -- mirrors TradingChart: chart identity tracked via .current
+  ]); // eslint-disable-line react-hooks/exhaustive-deps -- same pattern as TradingChart: chart identity via .current
 }

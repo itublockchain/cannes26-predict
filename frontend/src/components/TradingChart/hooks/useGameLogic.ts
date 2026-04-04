@@ -70,29 +70,24 @@ export function useGameLogic({
           el.style.display = "none";
         } else {
           el.style.display = "block";
-          el.style.transform = `translateX(${x}px)`;
+          el.style.transform = `translateX(${Math.round(x)}px)`;
         }
       };
 
       const anchor = roundAnchorLogicalRef.current;
       const ts = chart.timeScale();
-      /** Merkez → sol mum kenarı (çizgiler border-left ile bu x’te). */
       const halfBar = ts.options().barSpacing / 2;
-      const centerToBarLeft = (centerX: number | null): number | null => {
-        if (centerX === null) return null;
-        return centerX - halfBar;
-      };
 
-      const getXLogical = (offsetBars: number): number | null => {
+      /** `logicalToCoordinate` / `timeToCoordinate` mum merkezi — dik çizgiler burada. */
+      const centerXLogical = (offsetBars: number): number | null => {
         if (anchor === null) return null;
-        const cx = ts.logicalToCoordinate((anchor + offsetBars) as never);
-        return centerToBarLeft(cx);
+        return ts.logicalToCoordinate((anchor + offsetBars) as never);
       };
 
       let startX: number | null = null;
       if (anchor !== null) {
         gameStartLogicalRef.current = anchor;
-        startX = getXLogical(0);
+        startX = centerXLogical(0);
       } else {
         const centerStart = ts.timeToCoordinate(
           gameStartTimeRef.current as UTCTimestamp,
@@ -100,51 +95,53 @@ export function useGameLogic({
         if (centerStart !== null && gameStartLogicalRef.current === null) {
           gameStartLogicalRef.current = ts.coordinateToLogical(centerStart);
         }
-        startX = centerToBarLeft(centerStart);
+        startX = centerStart;
       }
 
-      const getX = (
+      const getXLine = (
         timeRef: React.MutableRefObject<number | null>,
         offsetBars: number,
-      ) => {
-        if (anchor !== null) return getXLogical(offsetBars);
+      ): number | null => {
+        if (anchor !== null) return centerXLogical(offsetBars);
         let cx = ts.timeToCoordinate(timeRef.current as UTCTimestamp);
         if (cx === null && gameStartLogicalRef.current !== null) {
           cx = ts.logicalToCoordinate(
             (gameStartLogicalRef.current + offsetBars) as never,
           );
         }
-        return centerToBarLeft(cx);
+        return cx;
       };
 
       updatePosition(lineT0, startX);
       updatePosition(
         lineObsEnd,
         anchor !== null
-          ? getXLogical(gameConfig.observationSeconds)
-          : getX(gameObservationEndTimeRef, gameConfig.observationSeconds),
+          ? centerXLogical(gameConfig.observationSeconds)
+          : getXLine(gameObservationEndTimeRef, gameConfig.observationSeconds),
       );
       updatePosition(
         lineTahminEnd,
         anchor !== null
-          ? getXLogical(gameConfig.tahminEndOffsetBars)
-          : getX(gameTahminEndTimeRef, gameConfig.tahminEndOffsetBars),
+          ? centerXLogical(gameConfig.tahminEndOffsetBars)
+          : getXLine(gameTahminEndTimeRef, gameConfig.tahminEndOffsetBars),
       );
       updatePosition(
         lineRoundEnd,
         anchor !== null
-          ? getXLogical(gameConfig.brushZoneEndOffsetBars)
-          : getX(gameBrushZoneEndTimeRef, gameConfig.brushZoneEndOffsetBars),
+          ? centerXLogical(gameConfig.brushZoneEndOffsetBars)
+          : getXLine(gameBrushZoneEndTimeRef, gameConfig.brushZoneEndOffsetBars),
       );
 
-      const xTahminBandStart =
+      const cObs =
         anchor !== null
-          ? getXLogical(gameConfig.observationSeconds)
-          : getX(gameObservationEndTimeRef, gameConfig.observationSeconds);
-      const xTahminBandEnd =
+          ? centerXLogical(gameConfig.observationSeconds)
+          : getXLine(gameObservationEndTimeRef, gameConfig.observationSeconds);
+      const cTah =
         anchor !== null
-          ? getXLogical(gameConfig.tahminEndOffsetBars)
-          : getX(gameTahminEndTimeRef, gameConfig.tahminEndOffsetBars);
+          ? centerXLogical(gameConfig.tahminEndOffsetBars)
+          : getXLine(gameTahminEndTimeRef, gameConfig.tahminEndOffsetBars);
+      const xTahminBandStart = cObs === null ? null : cObs - halfBar;
+      const xTahminBandEnd = cTah === null ? null : cTah + halfBar;
 
       if (gameTahminBgAreaEl) {
         if (xTahminBandStart !== null && xTahminBandEnd !== null) {
@@ -156,10 +153,12 @@ export function useGameLogic({
             0,
             Math.min(maxVisibleX, xTahminBandEnd),
           );
-          const bgWidth = clippedEndX - clippedStartX;
+          const rs = Math.round(clippedStartX);
+          const re = Math.round(clippedEndX);
+          const bgWidth = Math.max(0, re - rs);
           if (bgWidth > 0) {
             gameTahminBgAreaEl.style.display = "block";
-            gameTahminBgAreaEl.style.transform = `translateX(${clippedStartX}px)`;
+            gameTahminBgAreaEl.style.transform = `translateX(${rs}px)`;
             gameTahminBgAreaEl.style.width = `${bgWidth}px`;
           } else {
             gameTahminBgAreaEl.style.display = "none";
@@ -170,18 +169,25 @@ export function useGameLogic({
       }
 
       if (gameBgAreaEl) {
-        const xBrush = xTahminBandEnd;
-        const xEnd =
+        const cBrush =
           anchor !== null
-            ? getXLogical(gameConfig.brushZoneEndOffsetBars)
-            : getX(gameBrushZoneEndTimeRef, gameConfig.brushZoneEndOffsetBars);
+            ? centerXLogical(gameConfig.tahminEndOffsetBars)
+            : getXLine(gameTahminEndTimeRef, gameConfig.tahminEndOffsetBars);
+        const cEnd =
+          anchor !== null
+            ? centerXLogical(gameConfig.brushZoneEndOffsetBars)
+            : getXLine(gameBrushZoneEndTimeRef, gameConfig.brushZoneEndOffsetBars);
+        const xBrush = cBrush === null ? null : cBrush - halfBar;
+        const xEnd = cEnd === null ? null : cEnd + halfBar;
         if (xBrush !== null && xEnd !== null) {
           const clippedStartX = Math.max(0, Math.min(maxVisibleX, xBrush));
           const clippedEndX = Math.max(0, Math.min(maxVisibleX, xEnd));
-          const bgWidth = clippedEndX - clippedStartX;
+          const rs = Math.round(clippedStartX);
+          const re = Math.round(clippedEndX);
+          const bgWidth = Math.max(0, re - rs);
           if (bgWidth > 0) {
             gameBgAreaEl.style.display = "block";
-            gameBgAreaEl.style.transform = `translateX(${clippedStartX}px)`;
+            gameBgAreaEl.style.transform = `translateX(${rs}px)`;
             gameBgAreaEl.style.width = `${bgWidth}px`;
           } else {
             gameBgAreaEl.style.display = "none";

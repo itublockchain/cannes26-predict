@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type MutableRefObject } from "react";
 import {
   AreaSeries,
   ColorType,
@@ -81,6 +81,11 @@ export interface UseChartSetupOptions {
   lastValueVisible?: boolean;
   /** Ayna / salt-okunur: yatay sürükleme ve dokunma kaydırmayı kapatır. */
   disableChartScroll?: boolean;
+  /**
+   * `chart.remove()` öncesi — line-tools gibi eklentiler hâlâ geçerli Chart API ile detach edilir.
+   * Ref üst bileşen her render’da günceller; effect dependency’ye alınmaz.
+   */
+  beforeChartRemoveRef?: MutableRefObject<(() => void) | null>;
 }
 
 export function useChartSetup(
@@ -95,7 +100,12 @@ export function useChartSetup(
     const container = containerRef.current;
     if (!container) return;
 
-    const { clientWidth, clientHeight } = container;
+    /** Tam sayı boyut: çift panelde iki chart aynı CSS genişliğinde olsa bile alt-piksel tuval farkı olmasın. */
+    const sized = () => ({
+      width: Math.max(0, Math.floor(container.clientWidth)),
+      height: Math.max(0, Math.floor(container.clientHeight)),
+    });
+    const { width: chartW, height: chartH } = sized();
 
     /** Oyun penceresi setVisibleLogicalRange ile yatayda sınırlı; fiyat bandı kodla sabit — eksende dikey kaydırma yok. */
     const defaultBarSpacing = 6;
@@ -109,8 +119,8 @@ export function useChartSetup(
     const scrollLocked = options?.disableChartScroll === true;
 
     const chart = createChart(container, {
-      width: clientWidth,
-      height: clientHeight,
+      width: chartW,
+      height: chartH,
       handleScroll: {
         mouseWheel: false,
         pressedMouseMove: !scrollLocked,
@@ -186,18 +196,21 @@ export function useChartSetup(
     seriesRef.current = series;
 
     const resizeObserver = new ResizeObserver(() => {
-      chart.applyOptions({
-        width: container.clientWidth,
-        height: container.clientHeight,
-      });
+      const { width: w, height: h } = sized();
+      chart.applyOptions({ width: w, height: h });
     });
     resizeObserver.observe(container);
 
     return () => {
       resizeObserver.disconnect();
+      try {
+        options?.beforeChartRemoveRef?.current?.();
+      } catch {
+        /* line-tools teardown best-effort */
+      }
+      chart.remove();
       seriesRef.current = null;
       chartRef.current = null;
-      chart.remove();
     };
   }, [
     containerRef,

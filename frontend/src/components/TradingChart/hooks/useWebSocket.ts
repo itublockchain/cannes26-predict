@@ -40,8 +40,56 @@ interface UseWebSocketParams {
   flushLivePriceRangeRef: React.MutableRefObject<(() => void) | null>;
   /** Fırça görünümü animate edilirken zaman eksenini WS ile ezmeyi kes */
   viewportAnimationActiveRef: React.MutableRefObject<boolean>;
-  /** Bir kez: gerçek tur başlangıcı ve bitişi (rakip/ayna grafik senkronu için). */
+  /** Once per round: real start/end unix (second-pane chart + parent state). */
   onGameRoundWindowKnown?: (start: number, end: number) => void;
+  /**
+   * `fixedPriceRangeRef` canlı mumda güncellenince çağrılır (çift panel: sağ grafiği
+   * aynı ref ile aynı karede kilitlemek için). Ref her render güncellenir; effect deps’e girmez.
+   */
+  livePriceRangeNotifyRef?: React.MutableRefObject<(() => void) | null> | null;
+}
+
+/**
+ * `series.priceScale()` bazen pane henüz yok / line-tools destroy / applyOptions yarışında patlar;
+ * sağ eksen gizliyken `chart.priceScale("right")` ile dene.
+ */
+export function applyVisiblePriceRangeFromSeriesOrChart(
+  chart: IChartApi,
+  series: ISeriesApi<"Area">,
+  range: { from: number; to: number },
+) {
+  try {
+    const ps = series.priceScale();
+    ps.setAutoScale(false);
+    ps.setVisibleRange(range);
+    return;
+  } catch {
+    /* series pane geçici olarak null */
+  }
+  try {
+    const ps = chart.priceScale("right");
+    ps.setAutoScale(false);
+    ps.setVisibleRange(range);
+  } catch {
+    /* noop */
+  }
+}
+
+function applyAutoScaleFalseSeriesOrChart(
+  chart: IChartApi,
+  series: ISeriesApi<"Area">,
+) {
+  try {
+    series.priceScale().setAutoScale(false);
+    return;
+  } catch {
+    /* */
+  }
+  try {
+    chart.priceScale("right").setAutoScale(false);
+  } catch {
+    /* noop */
+  }
 }
 
 /** Zaman + fiyat görünümünü tek seferde sabitler (mum güncellemesi sonrası kütüphane kaydırmasını geri alır). */
@@ -51,11 +99,15 @@ export function applyLockedViewport(
   logical: { from: number; to: number },
   price: { from: number; to: number } | null,
 ) {
-  chart.timeScale().setVisibleLogicalRange(logical);
-  const ps = series.priceScale();
-  ps.setAutoScale(false);
+  try {
+    chart.timeScale().setVisibleLogicalRange(logical);
+  } catch {
+    return;
+  }
   if (price) {
-    ps.setVisibleRange(price);
+    applyVisiblePriceRangeFromSeriesOrChart(chart, series, price);
+  } else {
+    applyAutoScaleFalseSeriesOrChart(chart, series);
   }
 }
 
@@ -336,6 +388,7 @@ function computePaddedPriceRange(
 }
 
 function lockPriceScaleFromSnapshot(
+  chart: IChartApi,
   series: ISeriesApi<"Area">,
   candles: { high: number; low: number }[],
   fixedPriceRangeRef: React.MutableRefObject<{
@@ -358,9 +411,7 @@ function lockPriceScaleFromSnapshot(
     maxP = Math.max(maxP, c.high);
   }
   const range = computePaddedPriceRange(minP, maxP, gameConfig);
-  const ps = series.priceScale();
-  ps.setAutoScale(false);
-  ps.setVisibleRange(range);
+  applyVisiblePriceRangeFromSeriesOrChart(chart, series, range);
   fixedPriceRangeRef.current = range;
 }
 
@@ -389,8 +440,9 @@ function getLastLineDatum(
  * Canlı mumlar: çizgi sadece kapanış; fitil (high/low) ekran dışına çıkmasın diye son OHLC ile genişletir.
  * Son N saniyelik pencereyi kullanır — fiyat uçunca ölçek otomatik uyum sağlar.
  */
-/** Ana grafik ile aynı canlı mum bandı; ayna chart snapshot sonrası dual.priceRange ile kilitlememek için. */
+/** Same live price band as main chart; second pane skips local range when `dual.priceRange` is synced. */
 export function refreshLockedPriceRangeFromLiveSeries(
+  chart: IChartApi,
   series: ISeriesApi<"Area">,
   fixedPriceRangeRef: React.MutableRefObject<{
     from: number;
@@ -421,9 +473,7 @@ export function refreshLockedPriceRangeFromLiveSeries(
   if (!Number.isFinite(minP) || !Number.isFinite(maxP)) return;
 
   const range = computePaddedPriceRange(minP, maxP, gameConfig);
-  const ps = series.priceScale();
-  ps.setAutoScale(false);
-  ps.setVisibleRange(range);
+  applyVisiblePriceRangeFromSeriesOrChart(chart, series, range);
   fixedPriceRangeRef.current = range;
 }
 
@@ -524,11 +574,14 @@ export function useWebSocket({
   flushLivePriceRangeRef,
   viewportAnimationActiveRef,
   onGameRoundWindowKnown,
+  livePriceRangeNotifyRef,
 }: UseWebSocketParams) {
   const wsRef = useRef<WebSocket | null>(null);
   const snapshotLoadedRef = useRef(false);
   const onRoundWindowCbRef = useRef(onGameRoundWindowKnown);
   onRoundWindowCbRef.current = onGameRoundWindowKnown;
+  const livePriceNotifyRef = useRef(livePriceRangeNotifyRef);
+  livePriceNotifyRef.current = livePriceRangeNotifyRef;
 
   useEffect(() => {
     if (!coin) return;
@@ -546,13 +599,15 @@ export function useWebSocket({
     const flushLivePriceRange = () => {
       const s = seriesRef.current;
       const c = chartRef.current;
-      if (!s) return;
+      if (!s || !c) return;
       refreshLockedPriceRangeFromLiveSeries(
+        c,
         s,
         fixedPriceRangeRef,
         gameConfig,
         lastLiveWickRef.current,
       );
+      livePriceNotifyRef.current?.current?.();
       const logicalLive = fixedLogicalRangeRef.current;
       if (c && logicalLive && !viewportAnimationActiveRef.current) {
         scheduleReassertLockedViewport(
@@ -659,6 +714,7 @@ export function useWebSocket({
           };
           fixedLogicalRangeRef.current = range;
           lockPriceScaleFromSnapshot(
+            chart,
             series,
             dataForChart,
             fixedPriceRangeRef,
@@ -671,6 +727,7 @@ export function useWebSocket({
             range,
             fixedPriceRangeRef.current,
           );
+          livePriceNotifyRef.current?.current?.();
           snapshotLoadedRef.current = true;
           onSnapshotLoaded();
         }
@@ -737,11 +794,13 @@ export function useWebSocket({
             const logicalLive = fixedLogicalRangeRef.current;
             if (!pauseLivePriceRangeRef.current) {
               refreshLockedPriceRangeFromLiveSeries(
+                chart,
                 series,
                 fixedPriceRangeRef,
                 gameConfig,
                 lastLiveWickRef.current,
               );
+              livePriceNotifyRef.current?.current?.();
             }
             if (logicalLive && !viewportAnimationActiveRef.current) {
               scheduleReassertLockedViewport(

@@ -9,6 +9,7 @@ import {
 import { registerLinesPlugin } from "lightweight-charts-line-tools-lines";
 import { registerFreehandPlugin } from "lightweight-charts-line-tools-freehand";
 import { registerFibRetracementPlugin } from "lightweight-charts-line-tools-fib-retracement";
+import { ensureBaseLineToolOrphanUpdatesSilenced } from "../utils/baseLineToolSilenceOrphanUpdates";
 import { ensurePolygonRendererClippedToPane } from "../utils/polygonRendererPaneClip";
 import {
   ensureFreehandPaneViewsClamped,
@@ -17,6 +18,7 @@ import {
 
 ensurePolygonRendererClippedToPane();
 ensureFreehandPointToScreenClamped();
+ensureBaseLineToolOrphanUpdatesSilenced();
 import {
   applyLockedViewport,
   reassertViewportAfterLineToolsPlugin,

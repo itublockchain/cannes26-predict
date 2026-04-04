@@ -1,46 +1,60 @@
+import type { IChartApi } from "lightweight-charts";
 import {
   useEffect,
   useMemo,
   useRef,
   type CSSProperties,
   type MutableRefObject,
+  type RefObject,
 } from "react";
 import { useChartSetup } from "./hooks/useChartSetup";
-import { useMirrorWebSocket } from "./hooks/useMirrorWebSocket";
-import { useMirrorChartOverlays } from "./hooks/useMirrorChartOverlays";
+import { useSecondPaneChartWebSocket } from "./hooks/useSecondPaneChartWebSocket";
+import { useSecondPaneChartOverlays } from "./hooks/useSecondPaneChartOverlays";
 import { resolveGameConfig, type TradingChartGameConfig } from "./types";
 import type {
   ChartDualSync,
-  MirrorGameWindow,
-} from "./hooks/useMirrorWebSocket";
+  GameRoundWindow,
+} from "./hooks/useSecondPaneChartWebSocket";
 import styles from "./TradingChart.module.css";
 
-export interface OpponentMirrorChartProps {
+export interface SecondPaneChartProps {
   wsUrl: string;
   coin?: string;
   gameConfig?: TradingChartGameConfig;
-  /** Ana `TradingChart` ile aynı tur [T0, tur sonu]; veri ve eksen sol ile hizalanır. */
-  gameWindow?: MirrorGameWindow | null;
-  /** Ana grafik kilitlendiğinde tam senkron (mantıksal görünüm, fiyat, barSpacing, zaman formatı). */
+  /** Same round window as main `TradingChart` [T0, end]. */
+  gameWindow?: GameRoundWindow | null;
+  /** When main chart is locked: shared logical view, price band, bar spacing, time format. */
   dualSync?: ChartDualSync | null;
-  /** `TradingChart` içinden: ana grafiğin `fixedPriceRangeRef` — dikey ölçek birebir aynı olur. */
+  /** Main chart `fixedPriceRangeRef` — Y-axis matches left pane. */
   mainChartPriceRangeRef?: MutableRefObject<{
+    from: number;
+    to: number;
+  } | null> | null;
+  /** Bumps when main price band updates; dual column reasserts Y scale. */
+  mainPriceRangeVersion?: number;
+  /** Sol chart API — kilit + çift sütunda görünür mantıksal aralık birebir kopyalanır. */
+  mainChartRef?: RefObject<IChartApi | null> | null;
+  /** Ana grafik `fixedLogicalRangeRef` — zaman ekseni sol ile aynı sayısal aralıkta kilitlenir. */
+  mainChartLogicalRangeRef?: MutableRefObject<{
     from: number;
     to: number;
   } | null> | null;
 }
 
 /**
- * Sonuç ekranı sağ panel: sol ile aynı mum akışı ve faz overlay’leri — çizim araçları yok.
+ * Right column chart: same candle stream and phase overlays as the main chart, read-only (no drawing tools).
  */
-export function OpponentMirrorChart({
+export function SecondPaneChart({
   wsUrl,
   coin = "BTC",
   gameConfig: gameConfigProp,
   gameWindow,
   dualSync,
   mainChartPriceRangeRef,
-}: OpponentMirrorChartProps) {
+  mainPriceRangeVersion,
+  mainChartRef,
+  mainChartLogicalRangeRef,
+}: SecondPaneChartProps) {
   const gameConfig = useMemo(
     () => resolveGameConfig(gameConfigProp),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -64,7 +78,7 @@ export function OpponentMirrorChart({
     lastValueVisible: true,
     disableChartScroll: true,
   });
-  useMirrorWebSocket({
+  useSecondPaneChartWebSocket({
     wsUrl,
     coin,
     chartRef,
@@ -74,16 +88,18 @@ export function OpponentMirrorChart({
     dualSyncRef,
     dualSync: dualSync ?? null,
     mainChartPriceRangeRef: mainChartPriceRangeRef ?? null,
+    mainPriceRangeVersion,
+    mainChartRef: mainChartRef ?? null,
+    mainChartLogicalRangeRef: mainChartLogicalRangeRef ?? null,
   });
 
-  /** Çift panelde ana grafik `lastValueVisible: false` — halka / etiket farkı olmasın */
   useEffect(() => {
     const s = seriesRef.current;
     if (!s) return;
     s.applyOptions({ lastValueVisible: dualSync == null });
   }, [dualSync, seriesRef]);
 
-  useMirrorChartOverlays(
+  useSecondPaneChartOverlays(
     chartRef,
     chartAreaRef,
     lineT0Ref,
@@ -97,7 +113,7 @@ export function OpponentMirrorChart({
   );
 
   return (
-    <div className={styles.opponentMirrorRoot}>
+    <div className={styles.secondPaneChartRoot}>
       <div className={styles.chartInfoBar} aria-label="Trading pair">
         {coin}/USDC
       </div>
@@ -133,7 +149,7 @@ export function OpponentMirrorChart({
             ref={containerRef}
             className={`${styles.chart} ${styles.chartScrollLocked}`}
             tabIndex={-1}
-            aria-label="Grafik — fırça çizimi yok"
+            aria-label="Chart — drawing tools disabled"
           />
         </div>
       </div>
