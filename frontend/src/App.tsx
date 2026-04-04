@@ -50,7 +50,7 @@ function App() {
     // Wallet is not connected
     if (!primaryWallet && location.pathname !== '/connect') {
       navigate('/connect', { replace: true })
-    } 
+    }
     // Wallet is connected, but no profile exists
     else if (primaryWallet && !profile && location.pathname !== '/profile') {
       navigate('/profile', { replace: true })

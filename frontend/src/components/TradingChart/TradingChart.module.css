@@ -1,0 +1,364 @@
+/* ── Wrapper ── */
+.wrapper {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  width: 100%;
+  display: flex;
+  background: #0c0f1a;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+/* ── Left Toolbar ── */
+.toolbarShell {
+  flex-shrink: 0;
+  width: 48px;
+  overflow: hidden;
+  align-self: stretch;
+  transition: width 0.38s cubic-bezier(0.4, 0, 0.2, 1);
+  /* Canvas/primitive taşması üst üste binmesin: toolbar her zaman grafik katmanının üstünde */
+  position: relative;
+  z-index: 20;
+}
+
+.toolbarShellLocked {
+  width: 0;
+  pointer-events: none;
+}
+
+.toolbar {
+  width: 48px;
+  height: 100%;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 0;
+  background: #131722;
+  border-right: 1px solid rgba(148, 163, 184, 0.1);
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+  transform: translateX(0);
+  transition: transform 0.38s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.toolbarSlideAway {
+  transform: translateX(-100%);
+}
+
+.toolbar::-webkit-scrollbar {
+  display: none;
+}
+
+.tbGroup {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 0;
+  width: 100%;
+}
+
+.tbGroup:not(:last-child) {
+  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+}
+
+.tbBtn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #636b7e;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  padding: 0;
+}
+
+.tbKeyHint {
+  position: absolute;
+  right: 3px;
+  bottom: 2px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  color: rgba(148, 163, 184, 0.65);
+  pointer-events: none;
+  letter-spacing: -0.02em;
+}
+
+.tbBtnActive .tbKeyHint {
+  color: rgba(147, 197, 253, 0.95);
+}
+
+.tbBtnDisabled .tbKeyHint {
+  opacity: 1;
+  color: rgba(148, 163, 184, 0.35);
+}
+
+.tbBtn:hover {
+  background: rgba(96, 165, 250, 0.1);
+  color: #94a3b8;
+}
+
+.tbBtnActive {
+  background: rgba(96, 165, 250, 0.15);
+  color: #60a5fa;
+}
+
+.tbBtnDisabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.tbSpacer {
+  flex: 1;
+}
+
+.tbActions {
+  border-bottom: none;
+  border-top: 1px solid rgba(148, 163, 184, 0.08);
+}
+
+.tbDanger:hover {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+}
+
+/* ── Chart column (info strip + chart, does not overlay the chart canvas) ── */
+.mainColumn {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  z-index: 1;
+}
+
+.chartInfoBar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  padding: 10px 16px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+  background: #131722;
+  font-size: 15px;
+  font-weight: 600;
+  color: #e2e8f0;
+  letter-spacing: 0.02em;
+  user-select: none;
+}
+
+/* Sol: mevcut oyun grafiği — sağ: ileride ikinci chart (şimdilik yer tutucu) */
+.chartWorkspace {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  overflow: hidden;
+}
+
+.chartLeftPane {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/** Oyun sürerken: grafik main column’u doldurur (eski tam genişlik) */
+.chartLeftPaneFull {
+  flex: 1 1 100%;
+}
+
+/** Oyun bitince: sol yarı grafik, sağ yarı yer tutucu */
+.chartLeftPaneHalf {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/** Ayırıcı tuval genişliğini border ile çalmaz; iki panel iç genişliği birebir eşit kalır */
+.chartWorkspaceDivider {
+  width: 1px;
+  flex-shrink: 0;
+  align-self: stretch;
+  background: rgba(148, 163, 184, 0.14);
+}
+
+.chartRightPlaceholder {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  background: #0c0f1a;
+  overflow: hidden;
+}
+
+/**
+ * Ekstra flex katmanı chartLeftPane ile aynı yüksekliği bozuyordu;
+ * `contents` → chartInfoBar + chartArea doğrudan chartRightPlaceholder sütununda.
+ */
+.opponentMirrorRoot {
+  display: contents;
+}
+
+/* ── Chart Area ── */
+.chartArea {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.chartShell {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+}
+
+.chart {
+  width: 100%;
+  height: 100%;
+  touch-action: pan-x;
+  overscroll-behavior-y: none;
+  outline: none;
+  /* Fırça smoothing / kalın çizgi taşmasını kutu içinde kes (sidebar’a sızmaz) */
+  overflow: hidden;
+  isolation: isolate;
+  contain: paint;
+}
+
+/** Ayna grafik: tarayıcı `pan-x` jesti LW ile birleşince yatay kayma — kapat */
+.chartScrollLocked {
+  touch-action: none;
+}
+
+/**
+ * LW grafik tuvali çoğu hareket için inline `cursor` atar; çizim modunda kalem görünsün
+ * diye aynı değeri özel özellik üzerinden tuval(lar)a !important ile uygula.
+ */
+.chartPenCursor canvas {
+  cursor: var(--trading-chart-pen-cursor) !important;
+}
+
+.drawingDebugCanvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 6;
+}
+
+/* ── Overlays ── */
+.gameStartLine {
+  position: absolute;
+  top: 0;
+  bottom: var(--trading-chart-overlay-bottom, 26px);
+  left: 0;
+  width: 0;
+  border-left: 2px solid rgba(255, 255, 255, 0.1);
+  pointer-events: none;
+  z-index: 5;
+  display: none;
+}
+
+.gameEndLine {
+  position: absolute;
+  top: 0;
+  bottom: var(--trading-chart-overlay-bottom, 26px);
+  left: 0;
+  width: 0;
+  border-left: 1px solid rgba(100, 255, 100, 0.1);
+  pointer-events: none;
+  z-index: 5;
+  display: none;
+}
+
+.gameRedLine {
+  position: absolute;
+  top: 0;
+  bottom: var(--trading-chart-overlay-bottom, 26px);
+  left: 0;
+  width: 0;
+  border-left: 2px dashed rgba(255, 255, 255, 0.1);
+  pointer-events: none;
+  z-index: 5;
+  display: none;
+}
+
+.gameRoundEndLine {
+  position: absolute;
+  top: 0;
+  bottom: var(--trading-chart-overlay-bottom, 26px);
+  left: 0;
+  width: 0;
+  border-left: 2px solid rgba(148, 163, 184, 0.1);
+  pointer-events: none;
+  z-index: 5;
+  display: none;
+}
+
+/* Tahmin penceresi (60 sn fırça bandından hemen önceki ~15 sn): yeşil soldan sağa solar */
+.gameTahminBgArea {
+  position: absolute;
+  top: 0;
+  bottom: var(--trading-chart-overlay-bottom, 26px);
+  left: 0;
+  background: linear-gradient(
+    to right,
+    rgba(74, 222, 128, 0.025),
+    rgba(74, 222, 128, 0)
+  );
+  pointer-events: none;
+  z-index: 3;
+  display: none;
+}
+
+/* Son 60 mum (fırça) bandı */
+.gameBgArea {
+  position: absolute;
+  top: 0;
+  bottom: var(--trading-chart-overlay-bottom, 26px);
+  left: 0;
+  background: linear-gradient(
+    to right,
+    rgba(255, 255, 255, 0.025),
+    rgba(255, 255, 255, 0)
+  );
+  pointer-events: none;
+  z-index: 4;
+  display: none;
+}
+
+.devDrawingPointsBadge {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  z-index: 7;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #fef08a;
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid rgba(250, 204, 21, 0.35);
+  pointer-events: none;
+  user-select: none;
+}

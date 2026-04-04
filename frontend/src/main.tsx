@@ -1,32 +1,41 @@
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import { BrowserRouter } from 'react-router-dom'
-import { DynamicContextProvider } from '@dynamic-labs/sdk-react-core'
-import { EthereumWalletConnectors } from '@dynamic-labs/ethereum'
-import './index.css'
-import App from './App.tsx'
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { DynamicContextProvider } from "@dynamic-labs/sdk-react-core";
+import { EthereumWalletConnectors } from "@dynamic-labs/ethereum";
+import "./index.css";
+import App from "./App.tsx";
+import { ChartPage } from "./components/ChartPage.tsx";
 
-const ARC_TESTNET_CHAIN_ID = 5042002
+const ARC_TESTNET_CHAIN_ID = 5042002;
 
 const arcTestnet = {
   chainId: ARC_TESTNET_CHAIN_ID,
   networkId: ARC_TESTNET_CHAIN_ID,
-  name: 'Arc Testnet',
-  vanityName: 'Arc Testnet',
+  name: "Arc Testnet",
+  vanityName: "Arc Testnet",
   isTestnet: true,
-  nativeCurrency: { name: 'USDC', symbol: 'USDC', decimals: 6 },
-  rpcUrls: ['https://rpc.testnet.arc.network'],
+  nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 6 },
+  rpcUrls: ["https://rpc.testnet.arc.network"],
   blockExplorerUrls: [],
   iconUrls: [],
+};
+
+function TradingChartShell() {
+  return (
+    <div className="fixed inset-0 z-[100] flex min-h-0 min-w-0 flex-col bg-[#0c0f1a]">
+      <ChartPage />
+    </div>
+  );
 }
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
+function AppWithDynamic() {
+  return (
     <DynamicContextProvider
       settings={{
         environmentId: import.meta.env.VITE_DYNAMIC_ENVIRONMENT_ID,
         walletConnectors: [EthereumWalletConnectors],
-        initialAuthenticationMode: 'connect-and-sign',
+        initialAuthenticationMode: "connect-and-sign",
         shadowDOMEnabled: false,
         overrides: {
           evmNetworks: [arcTestnet],
@@ -87,9 +96,18 @@ createRoot(document.getElementById('root')!).render(
         `,
       }}
     >
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
+      <App />
     </DynamicContextProvider>
+  );
+}
+
+createRoot(document.getElementById("root")!).render(
+  <StrictMode>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/page" element={<TradingChartShell />} />
+        <Route path="*" element={<AppWithDynamic />} />
+      </Routes>
+    </BrowserRouter>
   </StrictMode>,
-)
+);
