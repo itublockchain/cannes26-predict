@@ -33,7 +33,7 @@ function App() {
   }, [])
 
   useEffect(() => {
-    updateScale()
+    queueMicrotask(updateScale)
     window.addEventListener('resize', updateScale)
     return () => window.removeEventListener('resize', updateScale)
   }, [updateScale])

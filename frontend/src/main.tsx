@@ -21,7 +21,7 @@ const arcTestnet = {
   iconUrls: [],
 };
 
-function TradingChartShell() {
+export function TradingChartShell() {
   return (
     <div className="fixed inset-0 z-[100] flex min-h-0 min-w-0 flex-col bg-[#0c0f1a]">
       <ChartPage />
@@ -29,7 +29,7 @@ function TradingChartShell() {
   );
 }
 
-function AppWithDynamic() {
+export function AppWithDynamic() {
   return (
     <DynamicContextProvider
       settings={{
