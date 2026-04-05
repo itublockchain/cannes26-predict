@@ -63,7 +63,7 @@ export const Header: React.FC = () => {
   return (
     <header className="flex items-center justify-between px-8 py-4 shrink-0 border-b border-border bg-card/60 backdrop-blur-sm">
       {/* Left: Brand */}
-      <img src="/chartguesser-logo.svg" alt="CHARTGUESSER" className="h-6 select-none" />
+      <img src="/cryptopredict-logo.svg" alt="CryptoPredict" className="h-6 w-auto max-w-[240px] object-contain object-left select-none" />
 
       {/* Right: Balance + Address + Logout */}
       <div className="flex items-center gap-3">
