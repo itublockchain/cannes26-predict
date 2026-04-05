@@ -8,6 +8,10 @@ import {
 import { useChartSetup } from "./hooks/useChartSetup";
 import { useMirrorWebSocket } from "./hooks/useMirrorWebSocket";
 import { useMirrorChartOverlays } from "./hooks/useMirrorChartOverlays";
+import {
+  applyLockedViewport,
+  scheduleReassertLockedViewport,
+} from "./hooks/useWebSocket";
 import { resolveGameConfig, type TradingChartGameConfig } from "./types";
 import type {
   ChartDualSync,
@@ -28,6 +32,8 @@ export interface OpponentMirrorChartProps {
     from: number;
     to: number;
   } | null> | null;
+  /** Sağ fiyat eksenini göster (slide animasyonundan sonra en sağda sabit kalır). */
+  showRightPriceScale?: boolean;
 }
 
 /**
@@ -40,6 +46,7 @@ export function OpponentMirrorChart({
   gameWindow,
   dualSync,
   mainChartPriceRangeRef,
+  showRightPriceScale = false,
 }: OpponentMirrorChartProps) {
   const gameConfig = useMemo(
     () => resolveGameConfig(gameConfigProp),
@@ -60,11 +67,11 @@ export function OpponentMirrorChart({
   dualSyncRef.current = dualSync ?? null;
 
   const { chartRef, seriesRef } = useChartSetup(containerRef, undefined, {
-    hideRightPriceScale: true,
+    hideRightPriceScale: !showRightPriceScale,
     lastValueVisible: true,
     disableChartScroll: true,
   });
-  useMirrorWebSocket({
+  const { fixedLogicalRangeRef, fixedPriceRangeRef } = useMirrorWebSocket({
     wsUrl,
     coin,
     chartRef,
@@ -82,6 +89,27 @@ export function OpponentMirrorChart({
     if (!s) return;
     s.applyOptions({ lastValueVisible: dualSync == null });
   }, [dualSync, seriesRef]);
+
+  /**
+   * CSS flex transition sırasında container boyut değiştirirken
+   * lightweight-charts viewport'u sıfırlayabiliyor.
+   * ResizeObserver ile her resize'da viewport'u tekrar kilitle.
+   */
+  useEffect(() => {
+    const shell = chartShellRef.current;
+    if (!shell) return;
+    const ro = new ResizeObserver(() => {
+      const chart = chartRef.current;
+      const series = seriesRef.current;
+      const logical = fixedLogicalRangeRef.current;
+      const price = fixedPriceRangeRef.current;
+      if (!chart || !series || !logical) return;
+      applyLockedViewport(chart, series, logical, price);
+      scheduleReassertLockedViewport(chart, series, logical, price);
+    });
+    ro.observe(shell);
+    return () => ro.disconnect();
+  }, [chartRef, seriesRef, fixedLogicalRangeRef, fixedPriceRangeRef]);
 
   useMirrorChartOverlays(
     chartRef,
