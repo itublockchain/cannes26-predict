@@ -111,14 +111,12 @@ export const Header: React.FC = () => {
   }
 
   return (
-    <header className="flex items-center justify-between px-8 py-3 shrink-0 border-b border-border bg-card/60 backdrop-blur-sm">
-      {/* Left: Brand */}
-      <div className="flex items-center gap-4">
-        <img src="/chartguesser-logo.svg" alt="CHARTGUESSER" className="h-6 select-none" />
-        <GameStatusBadge />
-      </div>
-
-      {/* Right: Balance + Address + Logout */}
+    <header className="flex items-center justify-between px-8 py-4 shrink-0 border-b border-border bg-card/60 backdrop-blur-sm">
+      <img
+        src="/game-logo.svg"
+        alt="Game"
+        className="h-6 w-auto max-w-[240px] object-contain object-left select-none"
+      />
       <div className="flex items-center gap-3">
         {/* USDC Balance — click to deposit */}
         <button
