@@ -222,4 +222,4 @@ The game utilizes a **Custom Runtime Environment (CRE)** to evaluate player perf
 - [Batıkan Kutluer](https://x.com/0xkutluer)   
 - [Mehmet Eren Kırkaş ](https://x.com/merenkirkas)    
 
-Built by ITU Blockchain at ETHGlobal Cannes 2026 readme nasıl
+Built by ITU Blockchain at ETHGlobal Cannes 2026
